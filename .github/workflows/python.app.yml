@@ -131,7 +131,7 @@ except Exception as e:
 
     - name: Deploy readiness check
       run: |
-        echo " 🚀 DEPLOYMENT READINESS CHECK"
+        echo "🚀 DEPLOYMENT READINESS CHECK"
         echo "=============================="
         python -c "
 import sys
