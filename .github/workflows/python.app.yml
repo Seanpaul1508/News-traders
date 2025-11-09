@@ -69,8 +69,7 @@ jobs:
         echo "==================================="
         
         # Create test script for news trading modules
-        cat > test_news_traders.py << 'EOF'
-import sys
+        cat > test_news_traders.py << 'EOF'import sys'
 import os
 
 try:
