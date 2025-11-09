@@ -1,60 +1,87 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from src.news_analyzer import NewsAnalyzer
-from src.trading_engine import TradingEngine
 from src.sentiment_analysis import SentimentAnalyzer
+from src.trading_engine import TradingEngine
 
 app = Flask(__name__)
 news_analyzer = NewsAnalyzer()
-trading_engine = TradingEngine()
 sentiment_analyzer = SentimentAnalyzer()
+trading_engine = TradingEngine()
 
 @app.route('/')
 def home():
     return jsonify({
-        "message": "News Traders API",
+        "message": "News Traders API - Live",
         "version": "1.0.0",
+        "status": "operational",
         "endpoints": {
-            "news": "/api/news",
-            "analyze": "/api/analyze/<symbol>",
-            "health": "/health"
+            "/health": "System health check",
+            "/api/news": "Get market news",
+            "/api/analyze/<symbol>": "Analyze stock with sentiment"
         }
     })
 
 @app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy", "service": "news-traders"})
+    return jsonify({
+        "status": "healthy",
+        "service": "news-traders",
+        "timestamp": "2024-01-01T00:00:00Z"
+    })
 
 @app.route('/api/news')
 def get_news():
-    """Get latest market news with sentiment analysis"""
+    """Get latest market news"""
     try:
-        news_df = news_analyzer.get_market_news()
+        news_df = news_analyzer.analyze_news()
+        
+        # Add sentiment analysis to news
+        articles_with_sentiment = []
+        for _, article in news_df.iterrows():
+            text = f"{article['title']} {article['description']}"
+            sentiment = sentiment_analyzer.analyze_sentiment(text)
+            
+            article_data = article.to_dict()
+            article_data.update(sentiment)
+            articles_with_sentiment.append(article_data)
+        
         return jsonify({
-            "news_count": len(news_df),
-            "articles": news_df.to_dict('records')
+            "status": "success",
+            "articles_count": len(articles_with_sentiment),
+            "articles": articles_with_sentiment
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/analyze/<symbol>')
 def analyze_stock(symbol):
-    """Analyze trading signal for a stock"""
+    """Analyze stock with news sentiment"""
     try:
-        # Get recent news and calculate average sentiment
-        news_df = news_analyzer.get_market_news()
-        avg_sentiment = news_df['sentiment'].mean() if not news_df.empty else 0
+        # Get news and calculate average sentiment
+        news_df = news_analyzer.analyze_news()
+        
+        if news_df.empty:
+            avg_sentiment = 0
+        else:
+            sentiments = []
+            for _, article in news_df.iterrows():
+                text = f"{article['title']} {article['description']}"
+                sentiment = sentiment_analyzer.analyze_sentiment(text)
+                sentiments.append(sentiment['polarity'])
+            avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
         
         # Generate trading signal
         signal = trading_engine.generate_signal(symbol.upper(), avg_sentiment)
         
         return jsonify({
+            "status": "success",
             "symbol": symbol.upper(),
             "analysis": signal,
             "news_analyzed": len(news_df),
-            "average_sentiment": avg_sentiment
+            "average_sentiment": round(avg_sentiment, 3)
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
